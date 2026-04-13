@@ -12,6 +12,7 @@ XCard.Extractor = (function () {
       authorHandle: getAuthorHandle(article),
       authorAvatarUrl: getAvatarUrl(article),
       tweetText: getTweetText(article),
+      tweetImageUrl: getTweetImageUrl(article),
       tweetUrl: getTweetUrl(article),
       isLongForm: longForm,
       articleTitle: longForm ? getArticleTitle(article) : null,
@@ -89,6 +90,16 @@ XCard.Extractor = (function () {
     var fallback = clone.innerText.trim();
     if (fallback.length > 10) return fallback;
 
+    return '';
+  }
+
+  function getTweetImageUrl(article) {
+    // Find the first media image in the tweet (not avatar, not emoji)
+    var mediaImg = article.querySelector('[data-testid="tweetPhoto"] img');
+    if (mediaImg && mediaImg.src) return mediaImg.src;
+    // Fallback: look for any large image in the tweet that's not the avatar
+    var imgs = article.querySelectorAll('img[src*="pbs.twimg.com/media"]');
+    if (imgs.length > 0) return imgs[0].src;
     return '';
   }
 

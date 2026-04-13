@@ -40,29 +40,37 @@ window.XCard = window.XCard || {};
         if (!tweetData.authorAvatarUrl) return resolve('');
         chrome.runtime.sendMessage(
           { type: 'FETCH_AVATAR', url: tweetData.authorAvatarUrl },
-          function (resp) {
-            resolve(resp && resp.success ? resp.dataUrl : '');
-          }
+          function (resp) { resolve(resp && resp.success ? resp.dataUrl : ''); }
         );
       });
 
-      // Call Grok via background (opens Grok tab, automates UI)
+      // Fetch tweet image if present
+      var tweetImagePromise = new Promise(function (resolve) {
+        if (!tweetData.tweetImageUrl) return resolve('');
+        chrome.runtime.sendMessage(
+          { type: 'FETCH_AVATAR', url: tweetData.tweetImageUrl },
+          function (resp) { resolve(resp && resp.success ? resp.dataUrl : ''); }
+        );
+      });
+
+      // Call AI API
       var grokPromise = new Promise(function (resolve, reject) {
         chrome.runtime.sendMessage(
           { type: 'GENERATE_TLDR', tweetData: tweetData, language: langName },
           function (resp) {
             if (resp && resp.success) resolve(resp.data);
-            else reject(new Error(resp ? resp.error : 'Grok request failed'));
+            else reject(new Error(resp ? resp.error : 'API request failed'));
           }
         );
       });
 
-      Promise.all([avatarPromise, grokPromise])
+      Promise.all([avatarPromise, grokPromise, tweetImagePromise])
         .then(function (results) {
           var avatarDataUrl = results[0];
           var grokResult = results[1];
+          var tweetImageDataUrl = results[2];
 
-          return XCard.Card.renderToImage(tweetData, grokResult, avatarDataUrl, theme)
+          return XCard.Card.renderToImage(tweetData, grokResult, avatarDataUrl, theme, tweetImageDataUrl)
             .then(function (imageResult) {
               XCard.Toast.dismiss(loadingToast);
               generationInProgress = false;

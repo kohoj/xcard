@@ -64,17 +64,18 @@ XCard.Card = (function () {
     return '<div class="xcard-md" style="color:' + theme.textSecondary + '">' + html + '</div>';
   }
 
-  function buildCardHTML(tweetData, grokResult, avatarDataUrl, theme) {
+  function buildCardHTML(tweetData, grokResult, avatarDataUrl, theme, tweetImageDataUrl) {
     var avatar = avatarDataUrl || tweetData.authorAvatarUrl;
     var badge = tweetData.verified ? getVerifiedBadge(tweetData.verifiedType) : '';
     var tldrHTML = renderMarkdown(grokResult.tldr, theme);
     var title = grokResult.title || '';
+    var tweetImage = tweetImageDataUrl || '';
 
     var html = ''
       + '<div class="xcard-card" style="'
       + 'background:' + theme.cardBg + ';'
       + 'border:1px solid ' + theme.cardBorder + ';'
-      + 'border-radius:16px;padding:20px;width:440px;'
+      + 'border-radius:16px;padding:20px;width:500px;'
       + 'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;'
       + 'box-sizing:border-box;">'
 
@@ -83,7 +84,7 @@ XCard.Card = (function () {
       +   '<img src="' + escapeHtml(avatar) + '" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" crossorigin="anonymous">'
       +   '<div style="flex:1;min-width:0;">'
       +     '<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">'
-      +       '<span style="color:' + theme.textPrimary + ';font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">'
+      +       '<span style="color:' + theme.textPrimary + ';font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;">'
       +         escapeHtml(tweetData.authorName)
       +       '</span>'
       +       badge
@@ -107,6 +108,13 @@ XCard.Card = (function () {
       +   tldrHTML
       + '</div>'
 
+      // Tweet image (first image if present)
+      + (tweetImage
+        ? '<div style="margin-top:12px;border-radius:12px;overflow:hidden;">'
+        +   '<img src="' + escapeHtml(tweetImage) + '" style="width:100%;display:block;border-radius:12px;" crossorigin="anonymous">'
+        + '</div>'
+        : '')
+
       // Footer
       + '<div style="margin-top:14px;padding-top:12px;border-top:1px solid ' + theme.divider + ';display:flex;justify-content:space-between;align-items:center;">'
       +   '<span style="color:' + theme.textTertiary + ';font-size:12px;">' + escapeHtml(tweetData.timestamp) + '</span>'
@@ -127,30 +135,36 @@ XCard.Card = (function () {
     return div.innerHTML;
   }
 
-  function renderToImage(tweetData, grokResult, avatarDataUrl, theme) {
+  function renderToImage(tweetData, grokResult, avatarDataUrl, theme, tweetImageDataUrl) {
     return new Promise(function (resolve, reject) {
       var container = document.createElement('div');
       container.id = 'xcard-render-container';
       container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;z-index:-1;';
-      container.innerHTML = buildCardHTML(tweetData, grokResult, avatarDataUrl, theme);
+      container.innerHTML = buildCardHTML(tweetData, grokResult, avatarDataUrl, theme, tweetImageDataUrl);
       document.body.appendChild(container);
 
       var cardEl = container.querySelector('.xcard-card');
 
-      // Wait for avatar image to load
-      var img = cardEl.querySelector('img');
-      var imgLoaded = img
-        ? new Promise(function (res) {
-            if (img.complete) return res();
+      // Wait for ALL images to load
+      var allImgs = cardEl.querySelectorAll('img');
+      var imgPromises = [];
+      allImgs.forEach(function (img) {
+        if (!img.complete) {
+          imgPromises.push(new Promise(function (res) {
             img.onload = res;
             img.onerror = res;
-          })
-        : Promise.resolve();
+          }));
+        }
+      });
+      var imgLoaded = imgPromises.length > 0 ? Promise.all(imgPromises) : Promise.resolve();
+
+      // Detect theme from the rendered card's background
+      var cardBgColor = cardEl.style.background || '#000';
 
       imgLoaded.then(function () {
         return html2canvas(cardEl, {
-          backgroundColor: null,
-          scale: 2,
+          backgroundColor: cardBgColor,
+          scale: 3,
           useCORS: true,
           logging: false
         });
