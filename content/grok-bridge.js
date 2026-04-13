@@ -1,5 +1,6 @@
 // XCard Grok Bridge — Runs in MAIN world (page context)
-// Two-step flow: CreateGrokConversation → add_response.json
+// Strategy: Intercept X.com's fetch pipeline to capture the
+// x-client-transaction-id header generator, then use it for our requests.
 
 (function () {
   'use strict';
@@ -7,6 +8,43 @@
   var BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
   var CREATE_CONV_ENDPOINT = 'https://x.com/i/api/graphql/vvC5uy7pWWHXS2aDi1FZeA/CreateGrokConversation';
   var ADD_RESPONSE_ENDPOINT = 'https://grok.x.com/2/grok/add_response.json';
+
+  // --- Transaction ID capture ---
+  // X.com's JS adds x-client-transaction-id to requests.
+  // We intercept fetch to capture this header from real X.com requests,
+  // then replay the generation for our own requests.
+  var capturedTransactionIds = [];
+  var nativeFetch = null;
+
+  function setupFetchInterceptor() {
+    // Save reference to whatever fetch is currently installed
+    // (X.com may have already wrapped it with their interceptor)
+    nativeFetch = window.fetch;
+
+    var originalFetch = window.fetch;
+    window.fetch = function (input, init) {
+      // Capture x-client-transaction-id from any outgoing request
+      if (init && init.headers) {
+        var txId = null;
+        if (init.headers instanceof Headers) {
+          txId = init.headers.get('x-client-transaction-id');
+        } else if (typeof init.headers === 'object') {
+          txId = init.headers['x-client-transaction-id'];
+        }
+        if (txId) {
+          capturedTransactionIds.push(txId);
+          // Keep only last 10
+          if (capturedTransactionIds.length > 10) {
+            capturedTransactionIds.shift();
+          }
+        }
+      }
+      return originalFetch.apply(this, arguments);
+    };
+  }
+
+  // Install interceptor immediately
+  setupFetchInterceptor();
 
   function getCsrfToken() {
     var match = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/);
@@ -20,9 +58,21 @@
     });
   }
 
+  // Get a transaction ID: use captured one or generate a base64 random string
+  function getTransactionId() {
+    if (capturedTransactionIds.length > 0) {
+      return capturedTransactionIds[capturedTransactionIds.length - 1];
+    }
+    // Fallback: generate a random base64-like string
+    var bytes = new Uint8Array(48);
+    crypto.getRandomValues(bytes);
+    return btoa(String.fromCharCode.apply(null, bytes));
+  }
+
   // Step 1: Create a new Grok conversation
   async function createConversation(csrfToken) {
-    var response = await fetch(CREATE_CONV_ENDPOINT, {
+    // Use nativeFetch to go through X.com's pipeline
+    var response = await nativeFetch(CREATE_CONV_ENDPOINT, {
       method: 'POST',
       headers: {
         'authorization': 'Bearer ' + BEARER_TOKEN,
@@ -30,7 +80,8 @@
         'x-csrf-token': csrfToken,
         'x-twitter-auth-type': 'OAuth2Session',
         'x-twitter-active-user': 'yes',
-        'x-twitter-client-language': 'en'
+        'x-twitter-client-language': 'en',
+        'x-client-transaction-id': getTransactionId()
       },
       credentials: 'include',
       body: JSON.stringify({
@@ -40,26 +91,28 @@
     });
 
     if (!response.ok) {
-      throw new Error('Failed to create Grok conversation: ' + response.status);
+      var errText = await response.text().catch(function () { return ''; });
+      throw new Error('Failed to create conversation: ' + response.status + ' ' + errText.substring(0, 200));
     }
 
     var data = await response.json();
-    // Extract conversationId from GraphQL response
-    var convId = data && data.data && data.data.create_grok_conversation &&
-                 data.data.create_grok_conversation.conversation_id;
+    console.log('[XCard] CreateGrokConversation response:', JSON.stringify(data).substring(0, 500));
+
+    // Extract conversationId - try multiple paths
+    var convId = null;
+    try {
+      // Try the most likely path
+      convId = data.data.create_grok_conversation.conversation_id;
+    } catch (e) {}
     if (!convId) {
-      // Try alternative response shapes
-      convId = data && data.data && data.data.grok_conversation_id;
-      if (!convId) {
-        // Last resort: look for any string that looks like a conversation ID
-        var jsonStr = JSON.stringify(data);
-        var match = jsonStr.match(/"conversation_id"\s*:\s*"(\d+)"/);
-        if (match) convId = match[1];
-      }
+      // Search the entire response for a conversation ID pattern
+      var jsonStr = JSON.stringify(data);
+      var match = jsonStr.match(/"conversation_?[iI]d"\s*:\s*"(\d+)"/i);
+      if (match) convId = match[1];
     }
 
     if (!convId) {
-      throw new Error('Could not extract conversationId from response: ' + JSON.stringify(data).substring(0, 200));
+      throw new Error('No conversationId in response: ' + JSON.stringify(data).substring(0, 300));
     }
 
     return convId;
@@ -67,7 +120,7 @@
 
   // Step 2: Send message to the conversation
   async function addResponse(csrfToken, conversationId, prompt) {
-    var response = await fetch(ADD_RESPONSE_ENDPOINT, {
+    var response = await nativeFetch(ADD_RESPONSE_ENDPOINT, {
       method: 'POST',
       headers: {
         'authorization': 'Bearer ' + BEARER_TOKEN,
@@ -77,6 +130,7 @@
         'x-twitter-active-user': 'yes',
         'x-twitter-client-language': 'en',
         'x-xai-request-id': generateUUID(),
+        'x-client-transaction-id': getTransactionId(),
         'origin': 'https://x.com',
         'referer': 'https://x.com/'
       },
@@ -125,9 +179,7 @@
         } else if (obj.result && obj.result.responseText) {
           fullMessage = obj.result.responseText;
         }
-      } catch (e) {
-        // Not JSON, skip
-      }
+      } catch (e) {}
     }
 
     if (!fullMessage) {
@@ -146,12 +198,16 @@
     }
 
     try {
-      // Step 1: Create conversation
+      console.log('[XCard] Creating Grok conversation...');
+      console.log('[XCard] Captured transaction IDs:', capturedTransactionIds.length);
       var conversationId = await createConversation(csrfToken);
-      // Step 2: Send message
+      console.log('[XCard] Conversation created:', conversationId);
+      console.log('[XCard] Sending message to Grok...');
       var result = await addResponse(csrfToken, conversationId, prompt);
+      console.log('[XCard] Grok responded, length:', result.length);
       sendResult(requestId, result, null);
     } catch (err) {
+      console.error('[XCard] Grok error:', err);
       sendResult(requestId, null, err.message || 'Grok request failed');
     }
   }
@@ -165,7 +221,6 @@
     }, '*');
   }
 
-  // Listen for requests from the content script (ISOLATED world)
   window.addEventListener('message', function (event) {
     if (event.source !== window) return;
     if (!event.data || event.data.type !== 'XCARD_GROK_REQUEST') return;
