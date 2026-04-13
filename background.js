@@ -87,11 +87,22 @@
 
     var data = await response.json();
 
-    // Extract text from response (handle OpenAI and Anthropic formats)
+    // Extract text from response (handle OpenAI, Anthropic, and thinking models)
     var text = '';
     if (data.choices && data.choices[0]) {
-      text = data.choices[0].message ? data.choices[0].message.content : (data.choices[0].text || '');
+      var msg = data.choices[0].message || {};
+      // Standard: content field
+      text = msg.content || '';
+      // Thinking models (e.g. kimi-k2.5): content may be null, check reasoning
+      if (!text && msg.reasoning) {
+        text = msg.reasoning;
+      }
+      // Fallback: text field (older completions API)
+      if (!text) {
+        text = data.choices[0].text || '';
+      }
     } else if (data.content && data.content[0]) {
+      // Anthropic format
       text = data.content[0].text || '';
     }
 
@@ -123,8 +134,8 @@
       headers: headers,
       body: JSON.stringify({
         model: model,
-        messages: [{ role: 'user', content: 'Say "XCard OK" in 3 words.' }],
-        max_tokens: 20,
+        messages: [{ role: 'user', content: 'Say "XCard OK" in 3 words. No thinking, just answer.' }],
+        max_tokens: 50,
         stream: false
       })
     });
@@ -137,12 +148,13 @@
     var data = await response.json();
     var text = '';
     if (data.choices && data.choices[0]) {
-      text = data.choices[0].message ? data.choices[0].message.content : (data.choices[0].text || '');
+      var msg = data.choices[0].message || {};
+      text = msg.content || msg.reasoning || data.choices[0].text || '';
     } else if (data.content && data.content[0]) {
       text = data.content[0].text || '';
     }
 
-    return text.trim().substring(0, 50);
+    return (text || 'OK (empty content)').trim().substring(0, 50);
   }
 
   // --- Settings ---
