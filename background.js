@@ -36,12 +36,65 @@
   }
 
   function parseGrokResponse(text) {
-    var titleMatch = text.match(/TITLE:\s*(.+?)(?:\n|$)/);
-    var tldrMatch = text.match(/TLDR:\s*\n?([\s\S]+)/);
+    // Strip "Thought for Xs" prefix that Grok adds for reasoning
+    text = text.replace(/^Thought for \d+s\s*/i, '');
+
+    // The captured text may include BOTH the user's prompt AND Grok's response.
+    // Our prompt template contains "TITLE: <title here>" — we need to skip it
+    // and find Grok's actual TITLE/TLDR output.
+
+    // Find ALL occurrences of TITLE: and use the LAST one (Grok's response)
+    var titleMatches = [];
+    var titleRegex = /TITLE:\s*(.+?)(?:\n|$)/g;
+    var m;
+    while ((m = titleRegex.exec(text)) !== null) {
+      titleMatches.push(m[1].trim());
+    }
+
+    // Find ALL occurrences of TLDR: and use the LAST one
+    var tldrMatches = [];
+    var tldrRegex = /TLDR:\s*\n?([\s\S]+?)(?=\nTITLE:|$)/g;
+    while ((m = tldrRegex.exec(text)) !== null) {
+      tldrMatches.push(m[1].trim());
+    }
+
+    // Use last TITLE that's not our template placeholder
+    var title = '';
+    for (var i = titleMatches.length - 1; i >= 0; i--) {
+      if (titleMatches[i] !== '<title here>' && titleMatches[i].length > 2) {
+        title = titleMatches[i];
+        break;
+      }
+    }
+
+    // For TLDR, get everything after the last "TLDR:" marker
+    var tldr = '';
+    var lastTldrIdx = text.lastIndexOf('TLDR:');
+    if (lastTldrIdx !== -1) {
+      tldr = text.substring(lastTldrIdx + 5).trim();
+    } else if (tldrMatches.length > 0) {
+      tldr = tldrMatches[tldrMatches.length - 1];
+    }
+
+    // If still no tldr, use everything after the title
+    if (!tldr && title) {
+      var titleIdx = text.lastIndexOf(title);
+      if (titleIdx !== -1) {
+        tldr = text.substring(titleIdx + title.length).replace(/^\s*\n/, '').trim();
+      }
+    }
+
+    // Final fallback
+    if (!tldr) {
+      tldr = text.trim();
+    }
+
+    // Clean up: remove any remaining "Thought for Xs" in tldr
+    tldr = tldr.replace(/^Thought for \d+s\s*/gi, '');
 
     return {
-      title: titleMatch ? titleMatch[1].trim() : '',
-      tldr: tldrMatch ? tldrMatch[1].trim() : text.trim()
+      title: title,
+      tldr: tldr
     };
   }
 

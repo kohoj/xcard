@@ -117,6 +117,9 @@
 
       await waitFor(300);
 
+      // Snapshot page text BEFORE sending, so we can isolate the NEW response
+      var preSnapshot = document.body.innerText || '';
+
       // Step 4: Click send or press Enter
       console.log('[XCard Auto] Looking for send button...');
       var sendBtn = findSendButton();
@@ -134,9 +137,9 @@
         }));
       }
 
-      // Step 5: Wait for response
+      // Step 5: Wait for response (pass pre-snapshot to isolate new content)
       console.log('[XCard Auto] Waiting for Grok response...');
-      var responseText = await waitForResponse(90000);
+      var responseText = await waitForResponse(90000, preSnapshot);
 
       if (!responseText || responseText.length < 10) {
         throw new Error('Grok response was empty or too short');
@@ -277,7 +280,7 @@
 
   // --- Wait for Response ---
 
-  function waitForResponse(timeout) {
+  function waitForResponse(timeout, preSnapshot) {
     return new Promise(function (resolve, reject) {
       var startTime = Date.now();
       var lastText = '';
@@ -286,18 +289,20 @@
 
       function check() {
         var elapsed = Date.now() - startTime;
-        var text = extractResponse();
+        var text = extractResponse(preSnapshot);
 
         if (text && text.length > 20) {
           if (text === lastText) {
             stableCount++;
             if (stableCount >= STABLE_CHECKS) {
+              console.log('[XCard Auto] Response stable after', Math.round(elapsed / 1000), 's');
               resolve(text);
               return;
             }
           } else {
             stableCount = 0;
             lastText = text;
+            console.log('[XCard Auto] Response updating... length:', text.length);
           }
         }
 
@@ -305,7 +310,7 @@
           if (lastText && lastText.length > 20) {
             resolve(lastText);
           } else {
-            reject(new Error('Grok response timeout (' + Math.round(elapsed / 1000) + 's). Last text length: ' + (lastText || '').length));
+            reject(new Error('Grok response timeout (' + Math.round(elapsed / 1000) + 's)'));
           }
           return;
         }
@@ -313,18 +318,71 @@
         setTimeout(check, 1500);
       }
 
-      // Initial delay to let the UI react
       setTimeout(check, 3000);
     });
   }
 
-  function extractResponse() {
-    // The Grok response is the LAST substantial text block on the page
-    // that appears AFTER the user's message
+  function extractResponse(preSnapshot) {
+    // Get current full page text
+    var currentText = document.body.innerText || '';
 
-    // Strategy 1: Find markdown-rendered blocks (Grok formats with markdown)
+    // The NEW content is what appeared after we sent the message.
+    // Simple diff: find text in currentText that wasn't in preSnapshot.
+    var newContent = '';
+    if (preSnapshot && currentText.length > preSnapshot.length) {
+      // Find where the new content starts
+      // The page text grows as Grok streams its response
+      // Strategy: find the longest suffix of currentText that doesn't appear in preSnapshot
+      var overlap = findNewContent(preSnapshot, currentText);
+      if (overlap.length > 20) {
+        newContent = overlap;
+      }
+    }
+
+    // Also try targeted extraction from DOM
+    var domResponse = extractFromDOM();
+
+    // Use whichever is longer and more substantial
+    var best = (newContent.length > domResponse.length) ? newContent : domResponse;
+
+    // Clean up: remove "Thought for Xs" prefix
+    best = best.replace(/^Thought for \d+s\s*/i, '');
+
+    return best.trim();
+  }
+
+  function findNewContent(before, after) {
+    // Find content in 'after' that wasn't in 'before'
+    // Simple approach: find the point where they diverge
+    var minLen = Math.min(before.length, after.length);
+    var divergeAt = 0;
+
+    // Find first difference
+    for (var i = 0; i < minLen; i++) {
+      if (before[i] !== after[i]) {
+        divergeAt = i;
+        break;
+      }
+      divergeAt = i;
+    }
+
+    // The new content is from divergeAt to end of 'after'
+    // But we might have some shared prefix, so look for a natural break
+    var newPart = after.substring(divergeAt);
+
+    // Find the start of meaningful new content (skip partial words)
+    var lineStart = newPart.indexOf('\n');
+    if (lineStart > 0 && lineStart < 50) {
+      newPart = newPart.substring(lineStart + 1);
+    }
+
+    return newPart.trim();
+  }
+
+  function extractFromDOM() {
+    // Strategy 1: Find markdown-rendered blocks
     var mdBlocks = document.querySelectorAll(
-      '[class*="markdown" i], [class*="prose" i], [data-testid*="message" i]'
+      '[class*="markdown" i], [class*="prose" i]'
     );
     if (mdBlocks.length > 0) {
       var last = mdBlocks[mdBlocks.length - 1];
@@ -332,34 +390,17 @@
       if (text.length > 20) return text.trim();
     }
 
-    // Strategy 2: Find conversation turns/messages
-    var turns = document.querySelectorAll(
-      '[data-testid*="turn" i], [data-testid*="response" i], ' +
-      '[class*="turn" i], [class*="response" i], [class*="answer" i]'
-    );
-    if (turns.length > 0) {
-      var lastTurn = turns[turns.length - 1];
-      var turnText = lastTurn.innerText || '';
-      if (turnText.length > 20) return turnText.trim();
-    }
-
-    // Strategy 3: Scan all divs in main content area for the longest text block
-    // that's NOT the input area and appeared after our prompt
+    // Strategy 2: Find the last substantial text block that's not an input
     var mainEl = document.querySelector('main, [role="main"]') || document.body;
     var allDivs = mainEl.querySelectorAll('div');
     var best = '';
 
     for (var i = 0; i < allDivs.length; i++) {
       var div = allDivs[i];
-      // Skip if it contains an input/textarea
       if (div.querySelector('textarea, [contenteditable="true"], [role="textbox"]')) continue;
-      // Skip if it's tiny
-      var t = (div.innerText || '').trim();
-      if (t.length <= best.length) continue;
-      // Skip if it looks like navigation or header
       if (div.querySelector('nav, header')) continue;
-      // Must have some child structure (not just a single text node)
-      if (div.children.length > 0 && t.length > 50) {
+      var t = (div.innerText || '').trim();
+      if (t.length > best.length && t.length > 50 && div.children.length > 0) {
         best = t;
       }
     }
