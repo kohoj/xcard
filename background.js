@@ -165,7 +165,13 @@
         xcard_base_url: '',
         xcard_api_key: '',
         xcard_model: ''
-      }, resolve);
+      }, function (s) {
+        resolve({
+          baseUrl: s.xcard_base_url,
+          apiKey: s.xcard_api_key,
+          model: s.xcard_model
+        });
+      });
     });
   }
 
