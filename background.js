@@ -23,7 +23,18 @@
     });
   }
 
-  function buildHeaders(csrfToken) {
+  function getAllCookies(url) {
+    return new Promise(function (resolve) {
+      chrome.cookies.getAll({ url: url }, function (cookies) {
+        var str = (cookies || []).map(function (c) {
+          return c.name + '=' + c.value;
+        }).join('; ');
+        resolve(str);
+      });
+    });
+  }
+
+  function buildHeaders(csrfToken, cookieString) {
     return {
       'authorization': 'Bearer ' + BEARER_TOKEN,
       'x-csrf-token': csrfToken,
@@ -32,7 +43,8 @@
       'x-twitter-client-language': 'en',
       'content-type': 'text/plain;charset=UTF-8',
       'origin': 'https://x.com',
-      'referer': 'https://x.com/'
+      'referer': 'https://x.com/',
+      'cookie': cookieString
     };
   }
 
@@ -76,7 +88,22 @@
 
   async function callGrok(tweetData, language) {
     var csrfToken = await getCsrfToken();
-    var headers = buildHeaders(csrfToken);
+    // Collect cookies from both x.com and grok.x.com
+    var cookies1 = await getAllCookies('https://x.com');
+    var cookies2 = await getAllCookies('https://grok.x.com');
+    // Merge, dedup by using a map
+    var seen = {};
+    var allParts = (cookies1 + '; ' + cookies2).split('; ');
+    var uniqueParts = [];
+    for (var c = 0; c < allParts.length; c++) {
+      var name = allParts[c].split('=')[0];
+      if (name && !seen[name]) {
+        seen[name] = true;
+        uniqueParts.push(allParts[c]);
+      }
+    }
+    var cookieString = uniqueParts.join('; ');
+    var headers = buildHeaders(csrfToken, cookieString);
     var prompt = buildPrompt(tweetData, language);
 
     var body = JSON.stringify({
