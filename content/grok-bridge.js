@@ -7,7 +7,12 @@
 
   var BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
   var CREATE_CONV_ENDPOINT = 'https://x.com/i/api/graphql/vvC5uy7pWWHXS2aDi1FZeA/CreateGrokConversation';
-  var ADD_RESPONSE_ENDPOINT = 'https://grok.x.com/2/grok/add_response.json';
+  // Try multiple domains — grok.x.com requires x-client-transaction-id,
+  // api.x.com may not. Fall back between them.
+  var GROK_ENDPOINTS = [
+    'https://api.x.com/2/grok/add_response.json',
+    'https://grok.x.com/2/grok/add_response.json'
+  ];
 
   // --- Transaction ID capture ---
   // X.com's JS adds x-client-transaction-id to requests.
@@ -24,19 +29,28 @@
     var originalFetch = window.fetch;
     window.fetch = function (input, init) {
       // Capture x-client-transaction-id from any outgoing request
+      var txId = null;
       if (init && init.headers) {
-        var txId = null;
         if (init.headers instanceof Headers) {
           txId = init.headers.get('x-client-transaction-id');
+        } else if (Array.isArray(init.headers)) {
+          for (var h = 0; h < init.headers.length; h++) {
+            if (init.headers[h][0] && init.headers[h][0].toLowerCase() === 'x-client-transaction-id') {
+              txId = init.headers[h][1];
+            }
+          }
         } else if (typeof init.headers === 'object') {
           txId = init.headers['x-client-transaction-id'];
         }
-        if (txId) {
-          capturedTransactionIds.push(txId);
-          // Keep only last 10
-          if (capturedTransactionIds.length > 10) {
-            capturedTransactionIds.shift();
-          }
+      }
+      // Also check if input is a Request object
+      if (!txId && input instanceof Request) {
+        txId = input.headers.get('x-client-transaction-id');
+      }
+      if (txId) {
+        capturedTransactionIds.push(txId);
+        if (capturedTransactionIds.length > 10) {
+          capturedTransactionIds.shift();
         }
       }
       return originalFetch.apply(this, arguments);
@@ -118,9 +132,24 @@
     return convId;
   }
 
-  // Step 2: Send message to the conversation
+  // Step 2: Send message to the conversation (try multiple endpoints)
   async function addResponse(csrfToken, conversationId, prompt) {
-    var response = await nativeFetch(ADD_RESPONSE_ENDPOINT, {
+    var lastError = null;
+    for (var ep = 0; ep < GROK_ENDPOINTS.length; ep++) {
+      try {
+        var result = await tryAddResponse(GROK_ENDPOINTS[ep], csrfToken, conversationId, prompt);
+        return result;
+      } catch (err) {
+        console.warn('[XCard] Endpoint failed:', GROK_ENDPOINTS[ep], err.message);
+        lastError = err;
+      }
+    }
+    throw lastError;
+  }
+
+  async function tryAddResponse(endpoint, csrfToken, conversationId, prompt) {
+    console.log('[XCard] Trying endpoint:', endpoint);
+    var response = await nativeFetch(endpoint, {
       method: 'POST',
       headers: {
         'authorization': 'Bearer ' + BEARER_TOKEN,
