@@ -67,9 +67,29 @@ XCard.Extractor = (function () {
   }
 
   function getTweetText(article) {
+    // Standard tweet text
     var textEl = article.querySelector(S.TWEET_TEXT);
-    if (!textEl) return '';
-    return textEl.innerText.trim();
+    if (textEl) {
+      var text = textEl.innerText.trim();
+      if (text) return text;
+    }
+
+    // Article/Note card — text may be in the card wrapper
+    var card = article.querySelector('[data-testid="card.wrapper"]');
+    if (card) {
+      var cardText = card.innerText.trim();
+      if (cardText) return cardText;
+    }
+
+    // Fallback: grab all visible text from the tweet, excluding UI elements
+    var clone = article.cloneNode(true);
+    // Remove action bar, user name row, timestamps
+    var remove = clone.querySelectorAll('[role="group"], nav, [data-testid="User-Name"]');
+    remove.forEach(function (el) { el.remove(); });
+    var fallback = clone.innerText.trim();
+    if (fallback.length > 10) return fallback;
+
+    return '';
   }
 
   function getTweetUrl(article) {
