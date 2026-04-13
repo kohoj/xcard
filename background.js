@@ -57,7 +57,7 @@
         { role: 'system', content: prompts.system },
         { role: 'user', content: prompts.user }
       ],
-      max_tokens: 1024,
+      max_tokens: 4096,
       temperature: 0.3,
       stream: false
     };
@@ -93,9 +93,9 @@
       var msg = data.choices[0].message || {};
       // Standard: content field
       text = msg.content || '';
-      // Thinking models (e.g. kimi-k2.5): content may be null, check reasoning
-      if (!text && msg.reasoning) {
-        text = msg.reasoning;
+      // Thinking models: content may be null, check reasoning fields
+      if (!text) {
+        text = msg.reasoning || msg.reasoning_content || '';
       }
       // Fallback: text field (older completions API)
       if (!text) {
@@ -149,7 +149,7 @@
     var text = '';
     if (data.choices && data.choices[0]) {
       var msg = data.choices[0].message || {};
-      text = msg.content || msg.reasoning || data.choices[0].text || '';
+      text = msg.content || msg.reasoning || msg.reasoning_content || data.choices[0].text || '';
     } else if (data.content && data.content[0]) {
       text = data.content[0].text || '';
     }
