@@ -206,9 +206,16 @@
     }
 
     if (message.type === 'TEST_API') {
+      console.log('[XCard] Testing API:', message.baseUrl, message.model);
       testAPI(message.baseUrl, message.apiKey, message.model)
-        .then(function (preview) { sendResponse({ success: true, preview: preview }); })
-        .catch(function (err) { sendResponse({ success: false, error: err.message }); });
+        .then(function (preview) {
+          console.log('[XCard] Test success:', preview);
+          sendResponse({ success: true, preview: preview });
+        })
+        .catch(function (err) {
+          console.error('[XCard] Test failed:', err);
+          sendResponse({ success: false, error: err.message || String(err) });
+        });
       return true;
     }
   });

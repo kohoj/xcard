@@ -73,10 +73,14 @@
     }, function (resp) {
       testBtn.disabled = false;
       testBtn.textContent = 'Test Connection';
+      if (chrome.runtime.lastError) {
+        showTestResult('error', 'Extension error: ' + chrome.runtime.lastError.message);
+        return;
+      }
       if (resp && resp.success) {
         showTestResult('success', 'Connected! Response: ' + (resp.preview || 'OK'));
       } else {
-        showTestResult('error', resp ? resp.error : 'Connection failed');
+        showTestResult('error', resp ? resp.error : 'No response from background');
       }
     });
   });
