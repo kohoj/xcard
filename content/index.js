@@ -197,9 +197,6 @@ window.XCard = window.XCard || {};
   // --- Init ---
 
   function init() {
-    // Don't inject XCard buttons on the Grok page
-    if (window.location.pathname.startsWith('/i/grok')) return;
-
     processNewTweets();
 
     var observer = new MutationObserver(onMutation);

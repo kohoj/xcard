@@ -10,9 +10,8 @@
   ],
   "host_permissions": [
     "https://x.com/*",
-    "https://api.x.com/*",
-    "https://grok.x.com/*",
-    "https://pbs.twimg.com/*"
+    "https://pbs.twimg.com/*",
+    "https://*/*"
   ],
   "content_scripts": [
     {
@@ -29,11 +28,6 @@
         "content/index.js"
       ],
       "css": ["content/styles.css"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://x.com/i/grok*"],
-      "js": ["content/grok-auto.js"],
       "run_at": "document_idle"
     }
   ],
