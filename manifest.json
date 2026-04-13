@@ -17,12 +17,6 @@
   "content_scripts": [
     {
       "matches": ["https://x.com/*"],
-      "js": ["content/grok-bridge.js"],
-      "world": "MAIN",
-      "run_at": "document_start"
-    },
-    {
-      "matches": ["https://x.com/*"],
       "js": [
         "lib/marked.min.js",
         "lib/html2canvas.min.js",
@@ -35,6 +29,11 @@
         "content/index.js"
       ],
       "css": ["content/styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://x.com/i/grok*"],
+      "js": ["content/grok-auto.js"],
       "run_at": "document_idle"
     }
   ],

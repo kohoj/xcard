@@ -1,60 +1,19 @@
 // XCard Background Service Worker
-// Handles: auth, Grok API calls, avatar proxy
+// Handles: Grok automation via tab, avatar proxy
 
 (function () {
   'use strict';
 
-  // Twitter/X.com public bearer token (embedded in their JS bundle)
-  var BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+  // --- Pending Grok Requests ---
+  // Map of requestId → { prompt, sendResponse, tabId }
+  var pendingRequests = {};
 
-  var GROK_ENDPOINT = 'https://grok.x.com/2/grok/add_response.json';
-
-  // --- Auth ---
-
-  function getCsrfToken() {
-    return new Promise(function (resolve, reject) {
-      chrome.cookies.get({ url: 'https://x.com', name: 'ct0' }, function (cookie) {
-        if (cookie && cookie.value) {
-          resolve(cookie.value);
-        } else {
-          reject(new Error('Not logged in to X.com — ct0 cookie not found'));
-        }
-      });
-    });
-  }
-
-  function getAllCookies(url) {
-    return new Promise(function (resolve) {
-      chrome.cookies.getAll({ url: url }, function (cookies) {
-        var str = (cookies || []).map(function (c) {
-          return c.name + '=' + c.value;
-        }).join('; ');
-        resolve(str);
-      });
-    });
-  }
-
-  function buildHeaders(csrfToken, cookieString) {
-    return {
-      'authorization': 'Bearer ' + BEARER_TOKEN,
-      'x-csrf-token': csrfToken,
-      'x-twitter-auth-type': 'OAuth2Session',
-      'x-twitter-active-user': 'yes',
-      'x-twitter-client-language': 'en',
-      'content-type': 'text/plain;charset=UTF-8',
-      'origin': 'https://x.com',
-      'referer': 'https://x.com/',
-      'cookie': cookieString
-    };
-  }
-
-  // --- Grok API ---
+  // --- Prompt Builder ---
 
   function buildPrompt(tweetData, language) {
     var hasTitle = tweetData.articleTitle && tweetData.articleTitle.trim();
     var langInstruction = language || 'Chinese';
 
-    // Include tweet URL so Grok can access the full post context
     var prompt = tweetData.tweetUrl + '\n\n';
     prompt += 'Summarize this X post. Respond in ' + langInstruction + '.\n\n';
 
@@ -86,92 +45,42 @@
     };
   }
 
-  async function callGrok(tweetData, language) {
-    var csrfToken = await getCsrfToken();
-    // Collect cookies from both x.com and grok.x.com
-    var cookies1 = await getAllCookies('https://x.com');
-    var cookies2 = await getAllCookies('https://grok.x.com');
-    // Merge, dedup by using a map
-    var seen = {};
-    var allParts = (cookies1 + '; ' + cookies2).split('; ');
-    var uniqueParts = [];
-    for (var c = 0; c < allParts.length; c++) {
-      var name = allParts[c].split('=')[0];
-      if (name && !seen[name]) {
-        seen[name] = true;
-        uniqueParts.push(allParts[c]);
-      }
-    }
-    var cookieString = uniqueParts.join('; ');
-    var headers = buildHeaders(csrfToken, cookieString);
-    var prompt = buildPrompt(tweetData, language);
+  // --- Grok via Tab Automation ---
 
-    var body = JSON.stringify({
-      responses: [
-        {
-          message: prompt,
-          sender: 1,
-          promptSource: '',
-          fileAttachments: []
+  function generateTldr(tweetData, language) {
+    return new Promise(function (resolve, reject) {
+      var prompt = buildPrompt(tweetData, language);
+      var requestId = 'xcard_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+
+      pendingRequests[requestId] = {
+        prompt: prompt,
+        resolve: resolve,
+        reject: reject
+      };
+
+      // Open Grok in a background tab
+      chrome.tabs.create({
+        url: 'https://x.com/i/grok#' + requestId,
+        active: false
+      }, function (tab) {
+        if (chrome.runtime.lastError) {
+          delete pendingRequests[requestId];
+          reject(new Error('Failed to open Grok tab: ' + chrome.runtime.lastError.message));
+          return;
         }
-      ],
-      systemPromptName: '',
-      grokModelOptionId: 'grok-3',
-      conversationId: '',
-      returnSearchResults: false,
-      returnCitations: false,
-      promptMetadata: {
-        promptSource: 'NATURAL',
-        action: 'INPUT'
-      },
-      imageGenerationCount: 0,
-      requestFeatures: {
-        eagerTweets: false,
-        serverHistory: false
-      },
-      enableSideBySide: false,
-      toolOverrides: {},
-      modelConfigOverride: {},
-      isTemporaryChat: true
+        pendingRequests[requestId].tabId = tab.id;
+        console.log('[XCard] Opened Grok tab:', tab.id, 'requestId:', requestId);
+
+        // Set a timeout for the entire operation
+        setTimeout(function () {
+          if (pendingRequests[requestId]) {
+            delete pendingRequests[requestId];
+            try { chrome.tabs.remove(tab.id); } catch (e) {}
+            reject(new Error('Grok automation timed out after 90s'));
+          }
+        }, 90000);
+      });
     });
-
-    var response = await fetch(GROK_ENDPOINT, {
-      method: 'POST',
-      headers: headers,
-      body: body,
-      credentials: 'include'
-    });
-
-    if (!response.ok) {
-      var errText = await response.text().catch(function () { return ''; });
-      throw new Error('Grok API error: ' + response.status + ' — ' + errText.substring(0, 200));
-    }
-
-    // Grok streams newline-delimited JSON. Collect all result parts.
-    var responseText = await response.text();
-    var fullMessage = '';
-    var lines = responseText.split('\n');
-
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i].trim();
-      if (!line) continue;
-      try {
-        var obj = JSON.parse(line);
-        if (obj.result && obj.result.message) {
-          fullMessage = obj.result.message;
-        } else if (obj.result && obj.result.responseText) {
-          fullMessage = obj.result.responseText;
-        }
-      } catch (e) {
-        // Not JSON, skip
-      }
-    }
-
-    if (!fullMessage) {
-      fullMessage = responseText;
-    }
-
-    return parseGrokResponse(fullMessage);
   }
 
   // --- Avatar Proxy ---
@@ -196,18 +105,54 @@
   // --- Message Handler ---
 
   chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    // Content script requests TLDR generation
     if (message.type === 'GENERATE_TLDR') {
-      callGrok(message.tweetData, message.language)
-        .then(function (result) { sendResponse({ success: true, data: result }); })
-        .catch(function (err) { sendResponse({ success: false, error: err.message }); });
+      generateTldr(message.tweetData, message.language)
+        .then(function (rawText) {
+          var result = parseGrokResponse(rawText);
+          sendResponse({ success: true, data: result });
+        })
+        .catch(function (err) {
+          sendResponse({ success: false, error: err.message });
+        });
       return true;
     }
 
+    // Avatar proxy
     if (message.type === 'FETCH_AVATAR') {
       fetchAvatarAsBase64(message.url)
         .then(function (dataUrl) { sendResponse({ success: true, dataUrl: dataUrl }); })
         .catch(function (err) { sendResponse({ success: false, error: err.message }); });
       return true;
+    }
+
+    // Grok automation tab is ready and asks for the prompt
+    if (message.type === 'GROK_AUTO_READY') {
+      var req = pendingRequests[message.requestId];
+      if (req) {
+        sendResponse({ prompt: req.prompt });
+      } else {
+        sendResponse({ prompt: null });
+      }
+      return false;
+    }
+
+    // Grok automation tab finished
+    if (message.type === 'GROK_AUTO_RESULT') {
+      var pending = pendingRequests[message.requestId];
+      if (pending) {
+        delete pendingRequests[message.requestId];
+        // Close the Grok tab
+        if (pending.tabId) {
+          try { chrome.tabs.remove(pending.tabId); } catch (e) {}
+        }
+        if (message.success && message.data) {
+          pending.resolve(message.data);
+        } else {
+          pending.reject(new Error(message.error || 'Grok automation failed'));
+        }
+      }
+      return false;
     }
   });
 
