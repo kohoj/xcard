@@ -1,1 +1,45 @@
 /* XCard — Injected Styles */
+
+/* ===== Toast ===== */
+.xcard-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 100001;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  max-width: 400px;
+  text-align: center;
+}
+
+.xcard-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.xcard-toast--info {
+  background: #1d9bf0;
+  color: #fff;
+}
+
+.xcard-toast--success {
+  background: #00ba7c;
+  color: #fff;
+}
+
+.xcard-toast--error {
+  background: #f4212e;
+  color: #fff;
+}
+
+.xcard-toast--loading {
+  background: #1d9bf0;
+  color: #fff;
+}
