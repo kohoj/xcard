@@ -43,7 +43,6 @@
           ],
           systemPromptName: '',
           grokModelOptionId: 'grok-3',
-          conversationId: '',
           returnSearchResults: false,
           returnCitations: false,
           promptMetadata: {
