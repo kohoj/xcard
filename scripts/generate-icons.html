@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+[16, 32, 48, 128].forEach(size => {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#1d9bf0';
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${size * 0.5}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('X', size / 2, size / 2);
+  var r = size * 0.18;
+  ctx.fillStyle = '#ffffff';
+  ctx.globalAlpha = 0.9;
+  ctx.fillRect(size - r * 2.2, size - r * 2.2, r * 2, r * 1.6);
+  ctx.globalAlpha = 1;
+  c.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `icon${size}.png`;
+    a.click();
+  });
+});
+</script>
+<p>Icons downloading...</p>
+</body>
+</html>

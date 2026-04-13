@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "XCard",
+  "description": "Generate shareable card images from X.com posts with AI-powered TL;DR",
+  "version": "1.0.0",
+  "permissions": [
+    "cookies",
+    "clipboardWrite",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://api.x.com/*",
+    "https://pbs.twimg.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*"],
+      "js": [
+        "lib/marked.min.js",
+        "lib/html2canvas.min.js",
+        "content/selectors.js",
+        "content/theme.js",
+        "content/extractor.js",
+        "content/toast.js",
+        "content/card.js",
+        "content/overlay.js",
+        "content/index.js"
+      ],
+      "css": ["content/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
