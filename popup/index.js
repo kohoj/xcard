@@ -8,21 +8,23 @@
   var savedMsg = document.getElementById('saved');
   var testBtn = document.getElementById('testBtn');
   var testResult = document.getElementById('testResult');
+  var presetBtns = document.querySelectorAll('.preset-btn');
 
-  // --- Load saved settings ---
+  // --- Load ---
   chrome.storage.local.get({
     xcard_language: 'zh',
     xcard_base_url: '',
     xcard_api_key: '',
     xcard_model: ''
-  }, function (store) {
-    langSelect.value = store.xcard_language;
-    baseUrlInput.value = store.xcard_base_url;
-    apiKeyInput.value = store.xcard_api_key;
-    modelInput.value = store.xcard_model;
+  }, function (s) {
+    langSelect.value = s.xcard_language;
+    baseUrlInput.value = s.xcard_base_url;
+    apiKeyInput.value = s.xcard_api_key;
+    modelInput.value = s.xcard_model;
+    highlightPreset();
   });
 
-  // --- Auto-save on change ---
+  // --- Save ---
   function save() {
     chrome.storage.local.set({
       xcard_language: langSelect.value,
@@ -31,32 +33,41 @@
       xcard_model: modelInput.value
     }, function () {
       savedMsg.classList.add('show');
-      setTimeout(function () { savedMsg.classList.remove('show'); }, 1500);
+      setTimeout(function () { savedMsg.classList.remove('show'); }, 1200);
     });
   }
 
-  baseUrlInput.addEventListener('change', save);
+  baseUrlInput.addEventListener('change', function () { save(); highlightPreset(); });
   apiKeyInput.addEventListener('change', save);
-  modelInput.addEventListener('change', save);
+  modelInput.addEventListener('change', function () { save(); highlightPreset(); });
   langSelect.addEventListener('change', save);
 
-  // --- Preset buttons ---
-  document.querySelectorAll('.preset-btn').forEach(function (btn) {
+  // --- Presets ---
+  function highlightPreset() {
+    var url = baseUrlInput.value.replace(/\/+$/, '');
+    presetBtns.forEach(function (btn) {
+      var match = btn.getAttribute('data-base') === url;
+      btn.classList.toggle('active', match);
+    });
+  }
+
+  presetBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
       baseUrlInput.value = btn.getAttribute('data-base');
       modelInput.value = btn.getAttribute('data-model');
       save();
+      highlightPreset();
     });
   });
 
-  // --- Test connection ---
+  // --- Test ---
   testBtn.addEventListener('click', function () {
     var baseUrl = baseUrlInput.value.replace(/\/+$/, '');
     var apiKey = apiKeyInput.value;
     var model = modelInput.value;
 
     if (!baseUrl || !apiKey || !model) {
-      showTestResult('error', 'Please fill in all fields');
+      showResult('error', 'Please fill in all fields.');
       return;
     }
 
@@ -74,18 +85,18 @@
       testBtn.disabled = false;
       testBtn.textContent = 'Test Connection';
       if (chrome.runtime.lastError) {
-        showTestResult('error', 'Extension error: ' + chrome.runtime.lastError.message);
+        showResult('error', chrome.runtime.lastError.message);
         return;
       }
       if (resp && resp.success) {
-        showTestResult('success', 'Connected! Response: ' + (resp.preview || 'OK'));
+        showResult('success', 'Connected — ' + (resp.preview || 'OK'));
       } else {
-        showTestResult('error', resp ? resp.error : 'No response from background');
+        showResult('error', resp ? resp.error : 'No response from background');
       }
     });
   });
 
-  function showTestResult(type, msg) {
+  function showResult(type, msg) {
     testResult.className = 'test-result ' + type;
     testResult.textContent = msg;
     testResult.style.display = 'block';
