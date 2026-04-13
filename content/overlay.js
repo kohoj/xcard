@@ -121,37 +121,67 @@ XCard.Overlay = (function () {
 
     var langName = getLanguageName(langCode);
 
-    chrome.runtime.sendMessage(
-      { type: 'GENERATE_TLDR', tweetData: currentTweetData, language: langName },
-      function (response) {
-        if (!response || !response.success) {
-          XCard.Toast.error(response ? response.error : 'Grok API failed');
+    // Use the Grok bridge via index.js's callGrokViaBridge
+    // We need to build the prompt and call via postMessage
+    var prompt = currentTweetData.tweetUrl + '\n\n';
+    prompt += 'Summarize this X post. Respond in ' + langName + '.\n\n';
+    prompt += 'Generate:\n';
+    prompt += '1. A concise, descriptive title for this post (one line, in ' + langName + ')\n';
+    prompt += '2. A TL;DR summary in markdown format. Use bullet points for key points, **bold** for emphasis. ';
+    prompt += 'Be thorough — aim for 3-8 bullet points depending on content length. ';
+    prompt += 'Include a brief introductory sentence before the bullet points.\n\n';
+    prompt += 'Format your response EXACTLY as:\nTITLE: <title here>\nTLDR:\n<markdown content>';
+
+    var requestId = 'xcard_regen_' + Date.now();
+
+    var onResponse = function (event) {
+      if (event.source !== window) return;
+      if (!event.data || event.data.type !== 'XCARD_GROK_RESPONSE') return;
+      if (event.data.requestId !== requestId) return;
+      window.removeEventListener('message', onResponse);
+
+      if (event.data.error) {
+        XCard.Toast.error(event.data.error);
+        img.style.opacity = '1';
+        regenBtn.disabled = false;
+        regenBtn.innerHTML = '&#x21bb;';
+        copyBtn.textContent = 'Failed';
+        copyBtn.disabled = false;
+        return;
+      }
+
+      var text = event.data.data;
+      var titleMatch = text.match(/TITLE:\s*(.+?)(?:\n|$)/);
+      var tldrMatch = text.match(/TLDR:\s*\n?([\s\S]+)/);
+      var grokResult = {
+        title: titleMatch ? titleMatch[1].trim() : '',
+        tldr: tldrMatch ? tldrMatch[1].trim() : text.trim()
+      };
+
+      XCard.Card.renderToImage(currentTweetData, grokResult, currentAvatarDataUrl, currentTheme)
+        .then(function (result) {
+          img.src = result.dataUrl;
           img.style.opacity = '1';
           regenBtn.disabled = false;
           regenBtn.innerHTML = '&#x21bb;';
-          copyBtn.textContent = 'Failed';
+          copyToClipboard(result.blob);
+          copyBtn.innerHTML = '&#x2713; Copied!';
           copyBtn.disabled = false;
-          return;
-        }
+        })
+        .catch(function (err) {
+          XCard.Toast.error('Render failed: ' + err.message);
+          img.style.opacity = '1';
+          regenBtn.disabled = false;
+          regenBtn.innerHTML = '&#x21bb;';
+        });
+    };
 
-        XCard.Card.renderToImage(currentTweetData, response.data, currentAvatarDataUrl, currentTheme)
-          .then(function (result) {
-            img.src = result.dataUrl;
-            img.style.opacity = '1';
-            regenBtn.disabled = false;
-            regenBtn.innerHTML = '&#x21bb;';
-            copyToClipboard(result.blob);
-            copyBtn.innerHTML = '&#x2713; Copied!';
-            copyBtn.disabled = false;
-          })
-          .catch(function (err) {
-            XCard.Toast.error('Render failed: ' + err.message);
-            img.style.opacity = '1';
-            regenBtn.disabled = false;
-            regenBtn.innerHTML = '&#x21bb;';
-          });
-      }
-    );
+    window.addEventListener('message', onResponse);
+    window.postMessage({
+      type: 'XCARD_GROK_REQUEST',
+      requestId: requestId,
+      prompt: prompt
+    }, '*');
   }
 
   function copyToClipboard(blob) {

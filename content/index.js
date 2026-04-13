@@ -11,6 +11,84 @@ window.XCard = window.XCard || {};
   // --- XCard Button SVG (small card icon) ---
   var BUTTON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="2" y="4" width="20" height="16" rx="3" ry="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="10" r="2.2"/><line x1="13" y1="9" x2="20" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="13" y1="13" x2="18" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
+  // --- Grok Bridge Communication ---
+
+  var grokCallbacks = {};
+  var grokRequestCounter = 0;
+
+  window.addEventListener('message', function (event) {
+    if (event.source !== window) return;
+    if (!event.data || event.data.type !== 'XCARD_GROK_RESPONSE') return;
+    var cb = grokCallbacks[event.data.requestId];
+    if (!cb) return;
+    delete grokCallbacks[event.data.requestId];
+    if (event.data.error) {
+      cb.reject(new Error(event.data.error));
+    } else {
+      cb.resolve(event.data.data);
+    }
+  });
+
+  function callGrokViaBridge(tweetData, language) {
+    return new Promise(function (resolve, reject) {
+      var requestId = 'xcard_' + (++grokRequestCounter) + '_' + Date.now();
+      var prompt = buildPrompt(tweetData, language);
+
+      grokCallbacks[requestId] = {
+        resolve: function (rawText) {
+          resolve(parseGrokResponse(rawText));
+        },
+        reject: reject
+      };
+
+      // Set a timeout in case bridge never responds
+      setTimeout(function () {
+        if (grokCallbacks[requestId]) {
+          delete grokCallbacks[requestId];
+          reject(new Error('Grok request timed out'));
+        }
+      }, 60000);
+
+      window.postMessage({
+        type: 'XCARD_GROK_REQUEST',
+        requestId: requestId,
+        prompt: prompt
+      }, '*');
+    });
+  }
+
+  function buildPrompt(tweetData, language) {
+    var hasTitle = tweetData.articleTitle && tweetData.articleTitle.trim();
+    var langInstruction = language || 'Chinese';
+    var prompt = tweetData.tweetUrl + '\n\n';
+    prompt += 'Summarize this X post. Respond in ' + langInstruction + '.\n\n';
+
+    if (hasTitle) {
+      prompt += 'The post title is: "' + tweetData.articleTitle + '"\n\n';
+      prompt += 'Generate a TL;DR summary in markdown format. Use bullet points for key points, **bold** for emphasis. ';
+      prompt += 'Be thorough — aim for 3-8 bullet points depending on content length. ';
+      prompt += 'Include a brief introductory sentence before the bullet points.\n\n';
+      prompt += 'Format your response as:\nTITLE: ' + tweetData.articleTitle + '\nTLDR:\n<markdown content>';
+    } else {
+      prompt += 'Generate:\n';
+      prompt += '1. A concise, descriptive title for this post (one line, in ' + langInstruction + ')\n';
+      prompt += '2. A TL;DR summary in markdown format. Use bullet points for key points, **bold** for emphasis. ';
+      prompt += 'Be thorough — aim for 3-8 bullet points depending on content length. ';
+      prompt += 'Include a brief introductory sentence before the bullet points.\n\n';
+      prompt += 'Format your response EXACTLY as:\nTITLE: <title here>\nTLDR:\n<markdown content>';
+    }
+    return prompt;
+  }
+
+  function parseGrokResponse(text) {
+    var titleMatch = text.match(/TITLE:\s*(.+?)(?:\n|$)/);
+    var tldrMatch = text.match(/TLDR:\s*\n?([\s\S]+)/);
+    return {
+      title: titleMatch ? titleMatch[1].trim() : '',
+      tldr: tldrMatch ? tldrMatch[1].trim() : text.trim()
+    };
+  }
+
   // --- Main orchestration ---
 
   var generationInProgress = false;
@@ -46,16 +124,8 @@ window.XCard = window.XCard || {};
         );
       });
 
-      // Call Grok
-      var grokPromise = new Promise(function (resolve, reject) {
-        chrome.runtime.sendMessage(
-          { type: 'GENERATE_TLDR', tweetData: tweetData, language: langName },
-          function (resp) {
-            if (resp && resp.success) resolve(resp.data);
-            else reject(new Error(resp ? resp.error : 'Grok request failed'));
-          }
-        );
-      });
+      // Call Grok via MAIN world bridge (for cookie-authenticated requests)
+      var grokPromise = callGrokViaBridge(tweetData, langName);
 
       Promise.all([avatarPromise, grokPromise])
         .then(function (results) {
