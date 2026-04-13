@@ -75,7 +75,7 @@ XCard.Card = (function () {
       + '<div class="xcard-card" style="'
       + 'background:' + theme.cardBg + ';'
       + 'border:1px solid ' + theme.cardBorder + ';'
-      + 'border-radius:16px;padding:20px;width:500px;'
+      + 'border-radius:0;padding:20px;width:500px;'
       + 'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;'
       + 'box-sizing:border-box;">'
 
