@@ -7,7 +7,7 @@
   // Twitter/X.com public bearer token (embedded in their JS bundle)
   var BEARER_TOKEN = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
-  var GROK_ENDPOINT = 'https://x.com/i/api/2/grok/add_response.json';
+  var GROK_ENDPOINT = 'https://grok.x.com/2/grok/add_response.json';
 
   // --- Auth ---
 
@@ -29,7 +29,10 @@
       'x-csrf-token': csrfToken,
       'x-twitter-auth-type': 'OAuth2Session',
       'x-twitter-active-user': 'yes',
-      'content-type': 'application/json'
+      'x-twitter-client-language': 'en',
+      'content-type': 'text/plain;charset=UTF-8',
+      'origin': 'https://x.com',
+      'referer': 'https://x.com/'
     };
   }
 
@@ -39,9 +42,9 @@
     var hasTitle = tweetData.articleTitle && tweetData.articleTitle.trim();
     var langInstruction = language || 'Chinese';
 
-    var prompt = 'You are summarizing an X (Twitter) post. Respond in ' + langInstruction + '.\n\n';
-    prompt += 'Post by ' + tweetData.authorHandle + ':\n---\n';
-    prompt += tweetData.tweetText + '\n---\n\n';
+    // Include tweet URL so Grok can access the full post context
+    var prompt = tweetData.tweetUrl + '\n\n';
+    prompt += 'Summarize this X post. Respond in ' + langInstruction + '.\n\n';
 
     if (hasTitle) {
       prompt += 'The post title is: "' + tweetData.articleTitle + '"\n\n';
@@ -80,11 +83,29 @@
       responses: [
         {
           message: prompt,
-          sender: 1
+          sender: 1,
+          promptSource: '',
+          fileAttachments: []
         }
       ],
       systemPromptName: '',
-      grokModelOptionId: 'grok-3'
+      grokModelOptionId: 'grok-3',
+      conversationId: '',
+      returnSearchResults: false,
+      returnCitations: false,
+      promptMetadata: {
+        promptSource: 'NATURAL',
+        action: 'INPUT'
+      },
+      imageGenerationCount: 0,
+      requestFeatures: {
+        eagerTweets: false,
+        serverHistory: false
+      },
+      enableSideBySide: false,
+      toolOverrides: {},
+      modelConfigOverride: {},
+      isTemporaryChat: true
     });
 
     var response = await fetch(GROK_ENDPOINT, {
@@ -120,7 +141,6 @@
     }
 
     if (!fullMessage) {
-      // Fallback: try the whole response as plain text
       fullMessage = responseText;
     }
 
@@ -153,7 +173,7 @@
       callGrok(message.tweetData, message.language)
         .then(function (result) { sendResponse({ success: true, data: result }); })
         .catch(function (err) { sendResponse({ success: false, error: err.message }); });
-      return true; // keep channel open for async
+      return true;
     }
 
     if (message.type === 'FETCH_AVATAR') {
