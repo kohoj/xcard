@@ -43,3 +43,52 @@
   background: #1d9bf0;
   color: #fff;
 }
+
+/* ===== Card Markdown ===== */
+.xcard-md p {
+  margin: 0 0 10px 0;
+}
+
+.xcard-md p:last-child {
+  margin-bottom: 0;
+}
+
+.xcard-md ul, .xcard-md ol {
+  margin: 0 0 10px 0;
+  padding-left: 20px;
+}
+
+.xcard-md li {
+  margin-bottom: 6px;
+}
+
+.xcard-md li:last-child {
+  margin-bottom: 0;
+}
+
+.xcard-md strong {
+  font-weight: 600;
+}
+
+.xcard-md em {
+  font-style: italic;
+}
+
+.xcard-md code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  background: rgba(127, 127, 127, 0.15);
+}
+
+.xcard-md blockquote {
+  margin: 0 0 10px 0;
+  padding-left: 12px;
+  border-left: 3px solid currentColor;
+  opacity: 0.8;
+}
+
+/* ===== Render Container ===== */
+#xcard-render-container {
+  pointer-events: none;
+}
