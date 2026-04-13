@@ -58,7 +58,8 @@
         { role: 'user', content: prompts.user }
       ],
       max_tokens: 1024,
-      temperature: 0.3
+      temperature: 0.3,
+      stream: false
     };
 
     var headers = {
@@ -123,7 +124,8 @@
       body: JSON.stringify({
         model: model,
         messages: [{ role: 'user', content: 'Say "XCard OK" in 3 words.' }],
-        max_tokens: 20
+        max_tokens: 20,
+        stream: false
       })
     });
 
