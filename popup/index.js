@@ -12,7 +12,7 @@
 
   // --- Load ---
   chrome.storage.local.get({
-    xcard_language: 'zh',
+    xcard_language: 'en',
     xcard_base_url: '',
     xcard_api_key: '',
     xcard_model: ''

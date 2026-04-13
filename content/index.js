@@ -31,7 +31,7 @@ window.XCard = window.XCard || {};
     generationInProgress = true;
     var loadingToast = XCard.Toast.loading('Generating card...');
 
-    chrome.storage.local.get({ xcard_language: 'zh' }, function (store) {
+    chrome.storage.local.get({ xcard_language: 'en' }, function (store) {
       var langCode = store.xcard_language;
       var langName = XCard.Overlay.getLanguageName(langCode);
 
