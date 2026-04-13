@@ -84,7 +84,7 @@ XCard.Card = (function () {
       +   '<img src="' + escapeHtml(avatar) + '" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" crossorigin="anonymous">'
       +   '<div style="flex:1;min-width:0;">'
       +     '<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">'
-      +       '<span style="color:' + theme.textPrimary + ';font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;">'
+      +       '<span style="color:' + theme.textPrimary + ';font-weight:700;font-size:15px;">'
       +         escapeHtml(tweetData.authorName)
       +       '</span>'
       +       badge
