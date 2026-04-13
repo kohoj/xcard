@@ -92,3 +92,165 @@
 #xcard-render-container {
   pointer-events: none;
 }
+
+/* ===== Overlay ===== */
+#xcard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+#xcard-overlay.xcard-overlay--visible {
+  opacity: 1;
+}
+
+.xcard-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.xcard-overlay-modal {
+  position: relative;
+  background: #1e2732;
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 500px;
+  width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.xcard-overlay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.xcard-overlay-title {
+  color: #e7e9ea;
+  font-weight: 600;
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.xcard-overlay-close {
+  background: none;
+  border: none;
+  color: #8b98a5;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.xcard-overlay-close:hover {
+  color: #e7e9ea;
+}
+
+.xcard-overlay-body {
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.xcard-overlay-image {
+  width: 100%;
+  border-radius: 12px;
+  display: block;
+  transition: opacity 0.3s;
+}
+
+.xcard-overlay-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.xcard-overlay-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.xcard-overlay-lang-row label {
+  color: #8b98a5;
+  font-size: 13px;
+}
+
+.xcard-overlay-lang {
+  background: #2d3741;
+  color: #e7e9ea;
+  border: 1px solid #38444d;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.xcard-overlay-regenerate {
+  background: #2d3741;
+  color: #e7e9ea;
+  border: 1px solid #38444d;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.xcard-overlay-regenerate:hover {
+  background: #3a4750;
+}
+
+.xcard-overlay-regenerate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.xcard-overlay-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.xcard-btn-primary {
+  flex: 1;
+  background: #1d9bf0;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.xcard-btn-primary:hover {
+  background: #1a8cd8;
+}
+
+.xcard-btn-secondary {
+  flex: 1;
+  background: transparent;
+  color: #1d9bf0;
+  border: 1px solid #1d9bf0;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.xcard-btn-secondary:hover {
+  background: rgba(29, 155, 240, 0.1);
+}
