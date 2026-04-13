@@ -50,7 +50,9 @@ XCard.Overlay = (function () {
     overlay.querySelector('.xcard-overlay-close').addEventListener('click', dismiss);
     overlay.querySelector('.xcard-overlay-backdrop').addEventListener('click', dismiss);
     overlay.querySelector('.xcard-overlay-download').addEventListener('click', function () {
-      downloadImage(imageDataUrl, tweetData.authorHandle);
+      // Always download the current image (may have been regenerated)
+      var currentSrc = overlay.querySelector('.xcard-overlay-image').src;
+      downloadImage(currentSrc, tweetData.authorHandle);
     });
 
     var langSelect = overlay.querySelector('.xcard-overlay-lang');
@@ -65,6 +67,9 @@ XCard.Overlay = (function () {
       var lang = langSelect.value;
       regenerate(lang);
     });
+
+    // Lock body scroll while overlay is open
+    document.body.style.overflow = 'hidden';
 
     copyToClipboard(imageBlob);
     document.addEventListener('keydown', onEsc);
@@ -173,6 +178,7 @@ XCard.Overlay = (function () {
     var overlay = document.getElementById('xcard-overlay');
     if (!overlay) return;
     overlay.classList.remove('xcard-overlay--visible');
+    document.body.style.overflow = '';
     setTimeout(function () {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     }, 300);

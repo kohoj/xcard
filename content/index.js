@@ -13,7 +13,14 @@ window.XCard = window.XCard || {};
 
   // --- Main orchestration ---
 
+  var generationInProgress = false;
+
   function generateCard(article) {
+    if (generationInProgress) {
+      XCard.Toast.info('Card generation in progress...');
+      return;
+    }
+
     var tweetData = XCard.Extractor.extractFromArticle(article);
     if (!tweetData.tweetText) {
       XCard.Toast.error('Could not extract tweet text');
@@ -21,6 +28,7 @@ window.XCard = window.XCard || {};
     }
 
     var theme = XCard.Theme.detect();
+    generationInProgress = true;
     var loadingToast = XCard.Toast.loading('Generating card...');
 
     chrome.storage.local.get({ xcard_language: 'zh' }, function (store) {
@@ -57,6 +65,7 @@ window.XCard = window.XCard || {};
           return XCard.Card.renderToImage(tweetData, grokResult, avatarDataUrl, theme)
             .then(function (imageResult) {
               XCard.Toast.dismiss(loadingToast);
+              generationInProgress = false;
               XCard.Overlay.show(
                 imageResult.dataUrl,
                 imageResult.blob,
@@ -69,6 +78,7 @@ window.XCard = window.XCard || {};
         })
         .catch(function (err) {
           XCard.Toast.dismiss(loadingToast);
+          generationInProgress = false;
           XCard.Toast.error(err.message || 'Failed to generate card');
           console.error('[XCard]', err);
         });
@@ -176,7 +186,7 @@ window.XCard = window.XCard || {};
   }
 
   function onMutation() {
-    if (pendingTimer) return;
+    if (pendingTimer) clearTimeout(pendingTimer);
     pendingTimer = setTimeout(function () {
       pendingTimer = null;
       processNewTweets();

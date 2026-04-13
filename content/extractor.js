@@ -6,16 +6,35 @@ XCard.Extractor = (function () {
   var S = XCard.Selectors;
 
   function extractFromArticle(article) {
+    var longForm = isLongForm(article);
     return {
       authorName: getAuthorName(article),
       authorHandle: getAuthorHandle(article),
       authorAvatarUrl: getAvatarUrl(article),
       tweetText: getTweetText(article),
       tweetUrl: getTweetUrl(article),
+      isLongForm: longForm,
+      articleTitle: longForm ? getArticleTitle(article) : null,
       timestamp: getTimestamp(article),
       verified: isVerified(article),
       verifiedType: getVerifiedType(article)
     };
+  }
+
+  function isLongForm(article) {
+    // X.com articles/notes have a card with a title, or a "Show more" indicator
+    return !!article.querySelector('[data-testid="card.wrapper"]') ||
+           !!article.querySelector('article [role="link"][aria-label]');
+  }
+
+  function getArticleTitle(article) {
+    // Long-form posts have a card with headline text
+    var card = article.querySelector('[data-testid="card.wrapper"]');
+    if (card) {
+      var headline = card.querySelector('[data-testid="card.layoutLarge.detail"] span, [data-testid="card.layoutSmall.detail"] span');
+      if (headline) return headline.textContent.trim();
+    }
+    return null;
   }
 
   function getAuthorName(article) {
@@ -87,11 +106,18 @@ XCard.Extractor = (function () {
     if (!userCell) return null;
     var badge = userCell.querySelector('svg[aria-label*="Verified"], svg[data-testid="icon-verified"]');
     if (!badge) return null;
-    var path = badge.querySelector('path');
-    if (!path) return 'blue';
-    var fill = getComputedStyle(badge).color || '';
-    if (fill.includes('gold') || fill.includes('D4AF37') || fill.includes('e8a815')) return 'gold';
-    if (fill.includes('gray') || fill.includes('808080') || fill.includes('829aab')) return 'gray';
+    // Check aria-label for badge type hints
+    var label = (badge.getAttribute('aria-label') || '').toLowerCase();
+    if (label.includes('business') || label.includes('official')) return 'gold';
+    if (label.includes('government') || label.includes('affiliated')) return 'gray';
+    // Fallback: parse computed color as RGB
+    var color = getComputedStyle(badge).color || '';
+    var rgb = color.match(/\d+/g);
+    if (rgb && rgb.length >= 3) {
+      var r = parseInt(rgb[0], 10), g = parseInt(rgb[1], 10), b = parseInt(rgb[2], 10);
+      if (r > 200 && g > 150 && b < 50) return 'gold';
+      if (r > 100 && g > 100 && b > 100 && r < 180) return 'gray';
+    }
     return 'blue';
   }
 

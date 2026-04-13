@@ -17,9 +17,47 @@ XCard.Card = (function () {
     return VERIFIED_SVG;
   }
 
+  // Allowed HTML tags for sanitization
+  var ALLOWED_TAGS = ['p', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'blockquote', 'br', 'h1', 'h2', 'h3', 'h4', 'a', 'pre'];
+
+  function sanitizeHtml(html) {
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    // Remove all script/style/iframe/img-with-onerror elements
+    var dangerous = div.querySelectorAll('script, style, iframe, object, embed, form, input, textarea');
+    for (var i = 0; i < dangerous.length; i++) {
+      dangerous[i].parentNode.removeChild(dangerous[i]);
+    }
+    // Remove event handler attributes from all elements
+    var allEls = div.querySelectorAll('*');
+    for (var j = 0; j < allEls.length; j++) {
+      var el = allEls[j];
+      var tag = el.tagName.toLowerCase();
+      if (ALLOWED_TAGS.indexOf(tag) === -1) {
+        // Replace disallowed tag with its text content
+        var text = document.createTextNode(el.textContent);
+        el.parentNode.replaceChild(text, el);
+        continue;
+      }
+      // Strip all event handlers and dangerous attributes
+      var attrs = el.attributes;
+      for (var k = attrs.length - 1; k >= 0; k--) {
+        var name = attrs[k].name.toLowerCase();
+        if (name.startsWith('on') || name === 'srcdoc' || name === 'formaction') {
+          el.removeAttribute(attrs[k].name);
+        }
+        if (name === 'href' && attrs[k].value.trim().toLowerCase().startsWith('javascript:')) {
+          el.removeAttribute(attrs[k].name);
+        }
+      }
+    }
+    return div.innerHTML;
+  }
+
   function renderMarkdown(md, theme) {
     if (typeof marked === 'undefined') return escapeHtml(md);
     var html = marked.parse(md, { breaks: true });
+    html = sanitizeHtml(html);
     // Apply bold/italic color for contrast
     html = html.replace(/<strong>/g, '<strong style="color:' + theme.boldText + ';font-weight:600;">');
     html = html.replace(/<em>/g, '<em style="color:' + theme.boldText + ';">');
@@ -42,7 +80,7 @@ XCard.Card = (function () {
 
       // Header: avatar + name + X logo
       + '<div style="display:flex;align-items:center;gap:10px;">'
-      +   '<img src="' + avatar + '" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" crossorigin="anonymous">'
+      +   '<img src="' + escapeHtml(avatar) + '" style="width:44px;height:44px;border-radius:50%;object-fit:cover;" crossorigin="anonymous">'
       +   '<div style="flex:1;min-width:0;">'
       +     '<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">'
       +       '<span style="color:' + theme.textPrimary + ';font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">'

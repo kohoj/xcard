@@ -137,6 +137,7 @@
       return new Promise(function (resolve) {
         var reader = new FileReader();
         reader.onloadend = function () { resolve(reader.result); };
+        reader.onerror = function () { resolve(''); };
         reader.readAsDataURL(blob);
       });
     } catch (e) {
